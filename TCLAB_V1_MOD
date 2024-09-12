@@ -1,0 +1,128 @@
+import sys
+import time
+import numpy as np
+try:
+    import serial
+except:
+    import pip
+    pip.main(['install','pyserial'])
+    import serial
+from serial.tools import list_ports
+
+class TCLab(object):
+    # Inicializa a conexão serial com o Arduino
+    def __init__(self, port=None, baud=9600):
+        port = self.findPort()  # Encontra a porta do Arduino
+        print('Opening connection')
+        self.sp = serial.Serial(port=port, baudrate=baud, timeout=2)
+        self.sp.flushInput()
+        self.sp.flushOutput()
+        time.sleep(3)
+        print('TCLab connected via Arduino on port ' + port)
+        
+    # Localiza a porta serial do Arduino
+    def findPort(self):
+        found = False
+        for port in list(list_ports.comports()):
+            # Identifica diferentes modelos de Arduino pelo VID:PID
+            if port[2].startswith('USB VID:PID=16D0:0613'):
+                port = port[0]
+                found = True
+            if port[2].startswith('USB VID:PID=1A86:7523'):
+                port = port[0]
+                found = True
+            if port[2].startswith('USB VID:PID=2341:8036'):
+                port = port[0]
+                found = True
+        if not found:
+            print('Arduino COM port not found')
+            print('Please ensure that the USB cable is connected')
+            print('--- Printing Serial Ports ---')
+            # Mostra portas seriais disponíveis para o usuário
+            for port in list(serial.tools.list_ports.comports()):
+                print(port[0] + ' ' + port[1] + ' ' + port[2])
+            print('For Windows: Open device manager...')
+            print('For MacOS: Open terminal and type: ls /dev/...')
+            print('For Linux: Open terminal and type: ls /dev/tty*...')
+            port = input('Input port: ')
+        return port
+    
+    # Envia comando para parar e lê a resposta
+    def stop(self):
+        return self.read('X')
+    
+    # Lê a versão do firmware
+    def version(self):
+        return self.read('VER')
+    
+    @property
+    def T1(self):
+        self._T1 = float(self.read('T1'))
+        return self._T1
+    
+    @property
+    def T2(self):
+        self._T2 = float(self.read('T2'))
+        return self._T2
+        
+    # Ajusta a intensidade do LED
+    def LED(self, pwm):
+        pwm = max(0.0, min(100.0, pwm)) / 2.0
+        self.write('LED', pwm)
+        return pwm
+
+    # Ajusta a potência dos aquecedores
+    def Q1(self, pwm):
+        pwm = max(0.0, min(100.0, pwm))
+        self.write('Q1', pwm)
+        return pwm
+        
+    def Q2(self, pwm):
+        pwm = max(0.0, min(100.0, pwm))
+        self.write('Q2', pwm)
+        return pwm
+
+    # Salva dados em um arquivo de texto
+    def save_txt(self, t, u1, u2, y1, y2, sp1, sp2):
+        data = np.vstack((t, u1, u2, y1, y2, sp1, sp2))  # Empilha verticalmente
+        data = data.T  # Transpõe os dados
+        top = 'Time (sec), Heater 1 (%), Heater 2 (%), Temperature 1 (degC), Temperature 2 (degC), Set Point 1 (degC), Set Point 2 (degC)'
+        np.savetxt('data.txt', data, delimiter=',', header=top, comments='')
+
+    # Lê um comando da porta serial
+    def read(self, cmd):
+        cmd_str = self.build_cmd_str(cmd, '')
+        try:
+            self.sp.write(cmd_str.encode())
+            self.sp.flush()
+        except Exception:
+            return None
+        return self.sp.readline().decode('UTF-8').replace("\r\n", "")
+    
+    # Envia um comando com valor PWM para a porta serial
+    def write(self, cmd, pwm):
+        cmd_str = self.build_cmd_str(cmd, (pwm,))
+        try:
+            self.sp.write(cmd_str.encode())
+            self.sp.flush()
+        except:
+            return None
+        return self.sp.readline().decode('UTF-8').replace("\r\n", "")
+    
+    # Constrói uma string de comando para o Arduino
+    def build_cmd_str(self, cmd, args=None):
+        if args:
+            args = ' '.join(map(str, args))
+        else:
+            args = ''
+        return "{cmd} {args}\n".format(cmd=cmd, args=args)
+        
+    # Fecha a conexão serial
+    def close(self):
+        try:
+            self.sp.close()
+            print('Arduino disconnected successfully')
+        except:
+            print('Problems disconnecting from Arduino.')
+            print('Please unplug and reconnect Arduino.')
+        return True
