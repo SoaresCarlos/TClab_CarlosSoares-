@@ -1,65 +1,65 @@
 /*
-  TCLab Temperature Control Lab Firmware
-  Jeffrey Kantor, Initial Version
-  John Hedengren, Modified
-  Oct 2017
+  Firmware de Controle de Temperatura TCLab
+  Jeffrey Kantor, Versão Inicial
+  John Hedengren, Modificado
+  Out 2017
 
-  This firmware is loaded into the Temperature Control Laboratory Arduino to
-  provide a high level interface to the Temperature Control Lab. The firmware
-  scans the serial port looking for case-insensitive commands:
+  Este firmware é carregado no Arduino do Laboratório de Controle de Temperatura para
+  fornecer uma interface de alto nível para o Laboratório de Controle de Temperatura. O firmware
+  verifica a porta serial em busca de comandos que não diferenciam maiúsculas de minúsculas:
 
-  Q1        set Heater 1, range 0 to 100% subject to limit (0-255 int)
-  Q2        set Heater 2, range 0 to 100% subject to limit (0-255 int)
-  T1        get Temperature T1, returns deg C as string
-  T2        get Temperature T2, returns dec C as string
-  VER       get firmware version string
-  X         stop, enter sleep mode
+  Q1        define o Aquecedor 1, faixa de 0 a 100% sujeito a limite (0-255 int)
+  Q2        define o Aquecedor 2, faixa de 0 a 100% sujeito a limite (0-255 int)
+  T1        obtém a Temperatura T1, retorna °C como string
+  T2        obtém a Temperatura T2, retorna °C como string
+  VER       obtém a versão do firmware como string
+  X         para, entra no modo de espera
 
-  Limits on the heater can be configured with the constants below.
+  Limites no aquecedor podem ser configurados com as constantes abaixo.
 */
 
-// constants
-const String vers = "1.01";    // version of this firmware
-const int baud = 9600;         // serial baud rate
-const char sp = ' ';           // command separator
-const char nl = '\n';          // command terminator
+// constantes
+const String vers = "1.01";    // versão deste firmware
+const int baud = 9600;         // taxa de transmissão serial
+const char sp = ' ';           // separador de comando
+const char nl = '\n';          // terminador de comando
 
-// pin numbers corresponding to signals on the TC Lab Shield
-const int pinT1   = 0;         // T1
-const int pinT2   = 2;         // T2
-const int pinQ1   = 3;         // Q1
-const int pinQ2   = 5;         // Q2
-const int pinLED  = 9;         // LED
+// números dos pinos correspondentes aos sinais na Placa TC Lab
+const int pinT1   = 0;         // Pino AD T1
+const int pinT2   = 2;         // Pino AD T2
+const int pinQ1   = 3;         // Pino PWM Q1
+const int pinQ2   = 5;         // Pino PWM Q2
+const int pinLED  = 9;         // Pino PWM LED
 
-// global variables
-char Buffer[64];               // buffer for parsing serial input
-String cmd;                    // command 
-float pv;                      // pin value
-float level;                   // LED level (0-100%)
-float Q1 = 0;                  // value written to Q1 pin
-float Q2 = 0;                  // value written to Q2 pin
-int iwrite = 0;                // integer value for writing
-float dwrite = 0;              // float value for writing
-int n = 10;                    // number of samples for each temperature measurement
+// variáveis globais
+char Buffer[64];               // buffer para análise da entrada serial
+String cmd;                    // comando
+float pv;                      // valor do pino
+float level;                   // nível do LED (0-100%)
+float Q1 = 0;                  // valor escrito no pino Q1
+float Q2 = 0;                  // valor escrito no pino Q2
+int iwrite = 0;                // valor inteiro para escrita
+float dwrite = 0;              // valor float para escrita
+int n = 10;                    // número de amostras para cada medição de temperatura
 
 void parseSerial(void) {
-  int ByteCount = Serial.readBytesUntil(nl,Buffer,sizeof(Buffer));
+  int ByteCount = Serial.readBytesUntil(nl, Buffer, sizeof(Buffer));
   String read_ = String(Buffer);
-  memset(Buffer,0,sizeof(Buffer));
+  memset(Buffer, 0, sizeof(Buffer));
    
-  // separate command from associated data
+  // separar comando dos dados associados
   int idx = read_.indexOf(sp);
-  cmd = read_.substring(0,idx);
+  cmd = read_.substring(0, idx);
   cmd.trim();
   cmd.toUpperCase();
 
-  // extract data. toInt() returns 0 on error
-  String data = read_.substring(idx+1);
+  // extrair dados. toInt() retorna 0 em caso de erro
+  String data = read_.substring(idx + 1);
   data.trim();
   pv = data.toFloat();
 }
 
-// sum of output = 300
+// soma da saída = 300
 // Q1_max = 200
 // Q2_max = 100
 void dispatchCommand(void) {
@@ -98,7 +98,7 @@ void dispatchCommand(void) {
     Serial.println(degC);
   }
   else if ((cmd == "V") or (cmd == "VER")) {
-    Serial.println("TCLab Firmware Version " + vers);
+    Serial.println("Versão do Firmware TCLab " + vers);
   }
   else if (cmd == "LED") {
     level = max(0.0, min(100.0, pv));
@@ -110,11 +110,11 @@ void dispatchCommand(void) {
   else if (cmd == "X") {
     analogWrite(pinQ1, 0);
     analogWrite(pinQ2, 0);
-    Serial.println("Stop");
+    Serial.println("Parar");
   }
 }
 
-// check temperature and shut-off heaters if above high limit
+// verificar temperatura e desligar aquecedores se acima do limite máximo
 void checkTemp(void) {
     float mV = (float) analogRead(pinT1) * (3300.0/1024.0);
     float degC = (mV - 500.0)/10.0;
@@ -123,7 +123,7 @@ void checkTemp(void) {
       Q2 = 0.0;
       analogWrite(pinQ1, 0);
       analogWrite(pinQ2, 0);
-      Serial.println("High Temp 1 (>100C): ");
+      Serial.println("Temperatura Alta 1 (>100C): ");
       Serial.println(degC);
     }
     mV = (float) analogRead(pinT2) * (3300.0/1024.0);
@@ -133,23 +133,23 @@ void checkTemp(void) {
       Q2 = 0.0;
       analogWrite(pinQ1, 0);
       analogWrite(pinQ2, 0);
-      Serial.println("High Temp 2 (>100C): ");
+      Serial.println("Temperatura Alta 2 (>100C): ");
       Serial.println(degC);
     }
 }
 
-// arduino startup
+// inicialização do arduino
 void setup() {
   analogReference(EXTERNAL);
   Serial.begin(baud); 
   while (!Serial) {
-    ; // wait for serial port to connect.
+    ; // aguarde a conexão da porta serial.
   }
   analogWrite(pinQ1, 0);
   analogWrite(pinQ2, 0);
 }
 
-// arduino main event loop
+// loop principal do arduino
 void loop() {
   parseSerial();
   dispatchCommand();
