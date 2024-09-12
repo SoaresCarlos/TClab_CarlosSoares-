@@ -1,0 +1,126 @@
+/*
+  Firmware de Controle de Temperatura TCLab
+  Jeffrey Kantor, Versão Inicial
+  John Hedengren, Modificado
+  Out 2017
+
+  Este firmware é carregado no Arduino do Laboratório de Controle de Temperatura para
+  fornecer uma interface de alto nível para o Laboratório de Controle de Temperatura. O firmware
+  verifica a porta serial em busca de comandos que não diferenciam maiúsculas de minúsculas:
+
+  Q1        define o Aquecedor 1, faixa de 0 a 100% sujeito a limite (0-255 int)
+  Q2        define o Aquecedor 2, faixa de 0 a 100% sujeito a limite (0-255 int)
+  T1        obtém a Temperatura T1, retorna °C como string
+  T2        obtém a Temperatura T2, retorna °C como string
+  VER       obtém a versão do firmware como string
+  X         para, entra no modo de espera
+
+  Limites no aquecedor podem ser configurados com as constantes abaixo.
+*/
+
+// constantes
+const String vers = "1.01";    // versão deste firmware
+const int baud = 9600;         // taxa de transmissão serial
+const char sp = ' ';           // separador de comando
+const char nl = '\n';          // terminador de comando
+
+// números dos pinos correspondentes aos sinais na Placa TC Lab
+const int pinT1   = 0;         // Pino AD T1 para leitura da temperatura
+const int pinT2   = 2;         // Pino AD T2 para leitura da temperatura
+const int pinQ1   = 3;         // Pino PWM Q1 para controle do aquecedor 1
+const int pinQ2   = 5;         // Pino PWM Q2 para controle do aquecedor 2
+const int pinLED  = 9;         // Pino PWM LED para controle do brilho do LED
+
+// variáveis globais
+char Buffer[64];               // buffer para armazenar dados da entrada serial
+String cmd;                    // comando recebido da entrada serial
+float pv;                      // valor do pino, usado para ajustar aquecedores e LED
+float level;                   // nível do LED (0-100%)
+float Q1 = 0;                  // valor do aquecedor 1
+float Q2 = 0;                  // valor do aquecedor 2
+int iwrite = 0;                // valor inteiro para escrita nos pinos PWM
+float dwrite = 0;              // valor float para escrita (não usado atualmente)
+int n = 10;                    // número de amostras para calcular a média da temperatura
+
+// Função para analisar a entrada serial e extrair comando e dados
+void parseSerial(void) {
+  // Lê bytes da entrada serial até encontrar o terminador de comando
+  int ByteCount = Serial.readBytesUntil(nl, Buffer, sizeof(Buffer));
+  // Cria uma String a partir do buffer
+  String read_ = String(Buffer);
+  // Limpa o buffer
+  memset(Buffer, 0, sizeof(Buffer));
+   
+  // Separa o comando dos dados associados
+  int idx = read_.indexOf(sp);    // Encontra o índice do separador de comando
+  cmd = read_.substring(0, idx);  // Extrai o comando
+  cmd.trim();                     // Remove espaços em branco extras
+  cmd.toUpperCase();             // Converte o comando para maiúsculas
+
+  // Extrai e converte os dados associados ao comando
+  String data = read_.substring(idx + 1);  // Extrai os dados após o separador
+  data.trim();                         // Remove espaços em branco extras
+  pv = data.toFloat();                 // Converte os dados para float
+}
+
+// Função para processar e executar o comando recebido
+void dispatchCommand(void) {
+  if (cmd == "Q1") {  // Se o comando for "Q1"
+    Q1 = max(0.0, min(100.0, pv));    // Ajusta o valor do aquecedor 1 dentro da faixa de 0 a 100%
+    iwrite = int(Q1 * 2.0);            // Converte o valor para um inteiro (0-255)
+    iwrite = max(0, min(255, iwrite)); // Garante que o valor esteja entre 0 e 255
+    analogWrite(pinQ1, iwrite);        // Escreve o valor no pino PWM do aquecedor 1
+    Serial.println(Q1);                // Envia o valor do aquecedor 1 para a saída serial
+  }
+  else if (cmd == "Q2") {  // Se o comando for "Q2"
+    Q2 = max(0.0, min(100.0, pv));    // Ajusta o valor do aquecedor 2 dentro da faixa de 0 a 100%
+    iwrite = int(Q2 * 1.0);            // Converte o valor para um inteiro (0-255)
+    iwrite = max(0, min(255, iwrite)); // Garante que o valor esteja entre 0 e 255
+    analogWrite(pinQ2, iwrite);        // Escreve o valor no pino PWM do aquecedor 2
+    Serial.println(Q2);                // Envia o valor do aquecedor 2 para a saída serial
+  }
+  else if (cmd == "T1") {  // Se o comando for "T1"
+    float mV = 0.0;        // Variável para armazenar a leitura da tensão
+    float degC = 0.0;     // Variável para armazenar a temperatura em °C
+    for (int i = 0; i < n; i++) {  // Faz a média de n leituras
+      mV = (float) analogRead(pinT1) * (3300.0/1024.0); // Converte a leitura AD para mV
+      degC = degC + (mV - 500.0)/10.0;  // Converte mV para temperatura em °C
+    }
+    degC = degC / float(n);   // Calcula a média das leituras
+    Serial.println(degC);     // Envia a temperatura para a saída serial
+  }
+  else if (cmd == "T2") {  // Se o comando for "T2"
+    float mV = 0.0;        // Variável para armazenar a leitura da tensão
+    float degC = 0.0;     // Variável para armazenar a temperatura em °C
+    for (int i = 0; i < n; i++) {  // Faz a média de n leituras
+      mV = (float) analogRead(pinT2) * (3300.0/1024.0); // Converte a leitura AD para mV
+      degC = degC + (mV - 500.0)/10.0;  // Converte mV para temperatura em °C
+    }
+    degC = degC / float(n);   // Calcula a média das leituras
+    Serial.println(degC);     // Envia a temperatura para a saída serial
+  }
+  else if ((cmd == "V") or (cmd == "VER")) {  // Se o comando for "V" ou "VER"
+    Serial.println("Versão do Firmware TCLab " + vers); // Envia a versão do firmware para a saída serial
+  }
+  else if (cmd == "LED") {  // Se o comando for "LED"
+    level = max(0.0, min(100.0, pv));    // Ajusta o nível do LED dentro da faixa de 0 a 100%
+    iwrite = int(level * 0.5);            // Converte o nível para um inteiro (0-50)
+    iwrite = max(0, min(50, iwrite));     // Garante que o valor esteja entre 0 e 50
+    analogWrite(pinLED, iwrite);          // Escreve o valor no pino PWM do LED
+    Serial.println(level);                // Envia o nível do LED para a saída serial
+  }  
+  else if (cmd == "X") {  // Se o comando for "X"
+    analogWrite(pinQ1, 0);  // Desliga o aquecedor 1
+    analogWrite(pinQ2, 0);  // Desliga o aquecedor 2
+    Serial.println("Parar"); // Envia uma mensagem de parada para a saída serial
+  }
+}
+
+// Função para verificar a temperatura e desligar aquecedores se acima do limite máximo
+void checkTemp(void) {
+    float mV = (float) analogRead(pinT1) * (3300.0/1024.0); // Converte a leitura AD para mV
+    float degC = (mV - 500.0)/10.0;  // Converte mV para temperatura em °C
+    if (degC >= 100.0) {  // Se a temperatura for maior ou igual a 100°C
+      Q1 = 0.0;          // Desliga o aquecedor 1
+      Q2 = 0.0;          // Desliga o aquecedor 2
+      analogWrite(pinQ1,
