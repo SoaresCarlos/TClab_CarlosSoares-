@@ -1,0 +1,30 @@
+int transistorPin = 9; // Pino conectado à base do TIP120
+int sensorPin = A0;    // Pino analógico conectado ao VOUT do TMP36GZ
+float temperaturaC;    // Variável para armazenar a temperatura em Celsius
+
+void setup() {
+  pinMode(transistorPin, OUTPUT);
+  Serial.begin(9600);  // Inicializa a comunicação serial
+}
+
+void loop() {
+  // Controle do transistor TIP120
+  analogWrite(transistorPin, 255); // Força o TIP120 a conduzir o máximo de corrente
+  delay(10000); // Mantém por 10 segundos
+  analogWrite(transistorPin, 0);  // Desliga
+  delay(10000); // Aguarda 10 segundos
+
+  // Leitura do TMP36GZ
+  int sensorValue = analogRead(sensorPin); // Lê o valor do sensor
+  float voltage = sensorValue * (5.0 / 1023.0); // Converte para tensão (0-5V)
+
+  // Converte a tensão para temperatura em Celsius
+  temperaturaC = (voltage - 0.5) * 100.0;
+
+  // Exibe a temperatura no monitor serial
+  Serial.print("Temperatura: ");
+  Serial.print(temperaturaC);
+  Serial.println(" C");
+
+  delay(1000);  // Atraso de 1 segundo entre leituras
+}
