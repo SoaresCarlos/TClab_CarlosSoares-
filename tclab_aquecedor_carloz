@@ -1,0 +1,12 @@
+int transistorPin = 9; // Pino conectado à base do TIP120
+
+void setup() {
+  pinMode(transistorPin, OUTPUT);
+}
+
+void loop() {
+  analogWrite(transistorPin, 255); // Força o TIP120 a conduzir o máximo de corrente (maior dissipação de calor)
+  delay(10000); // Mantém por 10 segundos
+  analogWrite(transistorPin, 0);  // Desliga
+  delay(10000); // Aguarda 10 segundos antes de repetir o ciclo
+}
